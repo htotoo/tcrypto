@@ -1,0 +1,17 @@
+{
+  "name": "tcrypto",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "HTotoo",
+  "license": "ISC",
+  "dependencies": {
+    "bfx-api-node-rest": "^4.6.1",
+    "binance-api-node": "^0.12.4",
+    "discord.js": "^14.9.0"
+  },
+  "type": "commonjs"
+}
