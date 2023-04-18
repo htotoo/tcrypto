@@ -144,3 +144,4 @@ dist
 .wallet
 .bot
 apis.json
+config.json
