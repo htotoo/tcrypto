@@ -374,6 +374,7 @@ class Bot
 					if (msg.orderStatus == "EXPIRED") stat = "Expired";
 					var str = "";
 					let cprice = Market.GetCurrentPrice(msg.symbol);
+					if (msg.price == 0 && msg.orderType == "MARKET") msg.price = msg.priceLastTrade;
 					let cdelta = Market.CalcDelta(cprice, parseFloat(msg.price));
 					str += "```"+stat+" ("+msg.orderId.toString()+"): " + msg.symbol + ". " +  msg.side  + "  p: " + msg.price + "   qt: " + msg.quantity + " /  "  + msg.totalTradeQuantity + ". Current delta: " + cdelta.toString() + "%.  Type: "+msg.orderType+"\n";
 					if (msg.orderStatus == "NEW")
