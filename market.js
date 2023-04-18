@@ -141,16 +141,20 @@ class Market  {
 			if (!newdataa) return ret;
 			var newdata = newdataa["balances"];
 			var olddata = [];
+			var moddate = "-";
 			if (fs.existsSync("./" + userid + ".wallet"))
 			{
 				var data = fs.readFileSync("./" + userid + ".wallet");
 				olddata = JSON.parse(data);
+				const stats = fs.statSync("./" + userid + ".wallet");
+				moddate = stats.mtime;
 			}
 			if (save) 
 			{
 				fs.writeFileSync("./" + userid + ".wallet", JSON.stringify(newdata, null, 2), 'utf-8');
 			}
 			ret["old"] = olddata;
+			ret["oldtime"] = moddate;
 			ret["new"] = newdata;
 			return ret;
 		}
@@ -186,7 +190,7 @@ class Market  {
 		str = str + "\nSUM in USD: " + sumnewusd.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 }) + "\n";
 		if (needdelta)
 		{
-			str = str + "-----\nChange:\n";
+			str = str + "-----\nChange (since "+ret["oldtime"]+"):\n";
 			olddata.forEach((element) => {
 			  var sum =  parseFloat(element["free"]) +   parseFloat(element["locked"]);
 			  if (sum <= 0) return;
@@ -196,18 +200,18 @@ class Market  {
 			for (const key in news) {
 				if (!olds.hasOwnProperty(key))
 				{
-					str = str + key + ": " + news[key].toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 20 }) + "\n";
+					str = str + key + ": " + news[key].toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 20 }) + "  ("+ Market.GetSymbolInUsdt(key, news[key]).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })+"$)\n";
 				}
 				else
 				{
 					if (news[key] - olds[key] == 0) continue;
-					str = str + key + ": " + (news[key] - olds[key]).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 20 }) + "\n";
+					str = str + key + ": " + (news[key] - olds[key]).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 20 }) + "  ("+ Market.GetSymbolInUsdt(key, news[key] - olds[key]).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })+"$)\n";
 				}
 			}
 			for (const key in olds) {
 				if (!news.hasOwnProperty(key))
 				{
-					str = str + key + ": -" + olds[key].toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 20 }) + "\n";
+					str = str + key + ": -" + olds[key].toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 20 }) + "  ("+ Market.GetSymbolInUsdt(key, -1*olds[key]).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })+"$)\n";
 				}
 			}			
 			str = str + "\nChange in USD: " + (sumnewusd-sumoldusd).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 });
