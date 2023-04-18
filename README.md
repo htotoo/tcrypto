@@ -15,3 +15,4 @@ Functions (for now):
 /twall - Queries the BTC/USD orderbook and check if there is a sell/buy wall.  
 /twallet - Queries the user's wallet, prints it's content. If the SAVE parameter is true, creates a snapshot. So on the next check, user can see the diff.  
 
+Instant execution report. On a selected channel, it will mention the user who's Binance order is changed (new, executed, cancelled, ..).
