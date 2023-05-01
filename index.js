@@ -8,6 +8,11 @@ if (!Config || !("discordToken" in Config) || !("discordClientId" in Config) || 
 	console.log ("There is no valid config.json edit it please.");
 	process.exit(-1);
 }	
+//upgrade from prev Config
+if (!("priceAlertsChannel" in Config))
+{
+	Config["priceAlertsChannel"] = Config["notifyChannel"]; //if you don't want this, set it to ""
+}	
 
 const discordClient = new Client({ intents:[ GatewayIntentBits.DirectMessages, GatewayIntentBits.Guilds,GatewayIntentBits.GuildBans,   GatewayIntentBits.GuildMessages,  GatewayIntentBits.MessageContent] });
 discordClient.commands = new Collection();
@@ -68,6 +73,11 @@ function CallBackExecutionReport(msg)
     BotSendMsg(msg);
 }
 
+function CallBackPricaChangeReport(msg)
+{
+    BotSendMsg(msg, Config["priceAlertsChannel"]);
+}
+
 
 discordClient.once(Events.ClientReady, async c => {
 	console.log(`Logged in as ${discordClient.user.tag}!`); 
@@ -75,6 +85,7 @@ discordClient.once(Events.ClientReady, async c => {
 	
 	await Bot.Init();
 	Bot.CallBackExecutionReport = CallBackExecutionReport;
+	Market.CallBackPricaChangeReport = CallBackPricaChangeReport;
     BotMsg("Watching..");
 });
 

@@ -6,10 +6,13 @@ const bfxRest = new RESTv2({ transform: false })
 
 class Market  {
 	
+	static CallBackPricaChangeReport = null;
+	
 	static exchangeInfo = {};
 	static binance = Binance();
 	static allPrices = {};
-  
+  	static lastCloses = {}; //for price alerts the 15m candle last closes
+	
     static toFixedTrunc(x, n) {
 	  const v = (typeof x === 'string' ? x : x.toString()).split('.');
 	  if (n <= 0) return v[0];
@@ -176,6 +179,8 @@ class Market  {
 		var str = "";
 		var news = {};
 		var olds = {};
+
+		
 		var sumnewusd = 0.0;
 		var sumoldusd = 0.0;
 		if (!newdata) return "Invalid API";
@@ -255,6 +260,64 @@ class Market  {
         return null;
     }
 	
+	static async ProcessAlerterCandle(candle)
+	{
+		//1.5% alert in 15 m
+		if (candle["isFinal"] == false) return; //no closing
+		var currClose = parseFloat(candle["close"]);
+		var symboli = candle["symbol"]+ "@" + candle["interval"];
+		if (! symboli in Market.lastCloses)
+		{
+			Market.lastCloses[symboli] = currClose;
+			return; //first
+		}
+		const priceDiff = currClose - Market.lastCloses[symboli];
+		const percentChange = (priceDiff / Market.lastCloses[symboli]) * 100;
+		
+		if (Math.abs(percentChange) >1.3)
+		{
+			try
+			{
+				var dir = "drop";
+				if (currClose > Market.lastCloses[symboli]) dir = "raise";
+				var msg = "Big price " + dir + " in " + symboli + "! ( " + percentChange.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + " % )";
+				if (Market.CallBackPricaChangeReport != null) Market.CallBackPricaChangeReport(msg);
+			}
+			catch(e) { console.log(e);}
+		}
+		Market.lastCloses[symboli] = currClose; //override last
+		console.log(symboli + "  changed: " + percentChange.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + " %");
+		/*
+		{
+		  eventType: 'kline',
+		  eventTime: 1682504696071,
+		  symbol: 'ETHUSDT',
+		  startTime: 1682504640000,
+		  closeTime: 1682504699999,
+		  firstTradeId: 1138488258,
+		  lastTradeId: 1138490247,
+		  open: '1898.23000000',
+		  high: '1902.00000000',
+		  low: '1898.23000000',
+		  close: '1900.30000000',
+		  volume: '1598.38220000',
+		  trades: 1990,
+		  interval: '1m',
+		  isFinal: false,
+		  quoteVolume: '3037234.35416800',
+		  buyVolume: '920.31000000',
+		  quoteBuyVolume: '1748724.34588300'
+		}
+		*/		
+	}
+	
+	static async InitPriceAlerts()
+	{
+		Market.binance.ws.candles(['BTCUSDT', 'ETHUSDT'], '15m', candle => {
+			Market.ProcessAlerterCandle(candle);
+		});
+	}
+	
 };
 
 class Bot
@@ -274,6 +337,9 @@ class Bot
 		await Market.GetExInfoAll();
 		setInterval(Market.UpdateAllPrices, 1000*60); //minutes
         await Market.UpdateAllPrices();
+		//init price alerters
+		await Market.InitPriceAlerts();
+		
 		//init all ws clients
 		for (let key in Bot.apis)
 		{
