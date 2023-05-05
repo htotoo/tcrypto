@@ -1,18 +1,24 @@
 
 const { Bot, Market } = require('./market.js')
+const { Specials } = require('./special.js')
 const { Client, Events, Collection, GatewayIntentBits, SlashCommandBuilder, ActivityType, REST, Routes } = require( 'discord.js');
 
-const Config = require('./config.json');
-if (!Config || !("discordToken" in Config) || !("discordClientId" in Config) || !("notifyChannel" in Config) || Config["discordToken"] == ""  || Config["discordClientId"] == "" )
-{
-	console.log ("There is no valid config.json edit it please.");
-	process.exit(-1);
-}	
-//upgrade from prev Config
-if (!("priceAlertsChannel" in Config))
-{
-	Config["priceAlertsChannel"] = Config["notifyChannel"]; //if you don't want this, set it to ""
-}	
+//         CONFIG PART
+
+	const Config = require('./config.json');
+	if (!Config || !("discordToken" in Config) || !("discordClientId" in Config) || !("notifyChannel" in Config) || Config["discordToken"] == ""  || Config["discordClientId"] == "" )
+	{
+		console.log ("There is no valid config.json edit it please.");
+		process.exit(-1);
+	}	
+	//upgrade from prev Config
+	if (!("priceAlertsChannel" in Config))
+	{
+		Config["priceAlertsChannel"] = Config["notifyChannel"]; //if you don't want this, set it to ""
+	}	
+
+
+
 
 const discordClient = new Client({ intents:[ GatewayIntentBits.DirectMessages, GatewayIntentBits.Guilds,GatewayIntentBits.GuildBans,   GatewayIntentBits.GuildMessages,  GatewayIntentBits.MessageContent] });
 discordClient.commands = new Collection();
@@ -73,9 +79,11 @@ function CallBackExecutionReport(msg)
     BotSendMsg(msg);
 }
 
-function CallBackPricaChangeReport(msg)
+function CallBackPriceChangeReport(msg, symbol, interval, change)
 {
     BotSendMsg(msg, Config["priceAlertsChannel"]);
+	Specials.CallBackPriceChangeReport(msg, symbol, interval, change);
+	
 }
 
 
@@ -85,7 +93,7 @@ discordClient.once(Events.ClientReady, async c => {
 	
 	await Bot.Init();
 	Bot.CallBackExecutionReport = CallBackExecutionReport;
-	Market.CallBackPricaChangeReport = CallBackPricaChangeReport;
+	Market.CallBackPriceChangeReport = CallBackPriceChangeReport;
     BotMsg("Watching..");
 });
 

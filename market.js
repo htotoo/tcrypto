@@ -6,7 +6,7 @@ const bfxRest = new RESTv2({ transform: false })
 
 class Market  {
 	
-	static CallBackPricaChangeReport = null;
+	static CallBackPriceChangeReport = null;
 	
 	static exchangeInfo = {};
 	static binance = Binance();
@@ -223,6 +223,7 @@ class Market  {
 		}
 		return str;
 	}
+
 	static GetCurrentPrice(symbol) 
     {
         let cprice = 0;
@@ -281,7 +282,7 @@ class Market  {
 				var dir = "drop";
 				if (currClose > Market.lastCloses[symboli]) dir = "raise";
 				var msg = "Big price " + dir + " in " + symboli + "! ( " + percentChange.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + " % )";
-				if (Market.CallBackPricaChangeReport != null) Market.CallBackPricaChangeReport(msg);
+				if (Market.CallBackPriceChangeReport != null) Market.CallBackPriceChangeReport(msg, candle["symbol"], candle["interval"],  percentChange.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 }));
 			}
 			catch(e) { console.log(e);}
 		}
