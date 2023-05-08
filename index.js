@@ -135,6 +135,7 @@ async function Init()
 	BotLoadCommand("tapi");
 	BotLoadCommand("tapidel");
 	BotLoadCommand("twallet");
+	BotLoadCommand("tpair");
 	BotRegisterCommands();
     discordClient.login(Config["discordToken"]);
 }

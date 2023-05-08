@@ -14,5 +14,6 @@ Functions (for now):
 /tsafeexit - Same as above, but for 0% (including trading fees), and for 1%.  
 /twall - Queries the BTC/USD orderbook and check if there is a sell/buy wall.  
 /twallet - Queries the user's wallet, prints it's content. If the SAVE parameter is true, creates a snapshot. So on the next check, user can see the diff.  
+/tpair - Shows current info about the trading pair.
 
 Instant execution report. On a selected channel, it will mention the user who's Binance order is changed (new, executed, cancelled, ..).
