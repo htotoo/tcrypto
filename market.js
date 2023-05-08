@@ -398,11 +398,19 @@ class Bot
 		await Market.InitPriceAlerts();
 		
 		//init all ws clients
+		Bot.ResetWsClients();
+		
+		console.log("Inited bot stuff");
+	}
+	
+	static async ResetWsClients()
+	{
 		for (let key in Bot.apis)
 		{
+			Bot.DeInitWsClient(key);
 			Bot.InitWsClient(key);
 		}
-		console.log("Inited bot stuff");
+		setTimeout(()=>{ Bot.ResetWsClients();}, 2*60*60*1000); //reset it 2 hourly
 	}
 	
 	static async InitWsClient(userid)
@@ -414,6 +422,7 @@ class Bot
 		}
 		catch(e) { console.log(e);}
 	}
+	
 	static async DeInitWsClient(userid)
 	{
 		if (Bot.clients.hasOwnProperty(userid))
@@ -455,8 +464,7 @@ class Bot
 		Bot.DeInitWsClient(userid);
 		return "API key deleted";
 	}
-	
-	
+		
 	
 	static CheckStreamedMsg(msg, uid)
 	{
