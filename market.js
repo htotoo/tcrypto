@@ -312,11 +312,67 @@ class Market  {
 		*/		
 	}
 	
-	static async InitPriceAlerts()
+	static btccandlecanceltoken = null;
+	static ethcandlecanceltoken = null;
+	static btccandletimer = null;
+	static ethcandletimer = null;
+	
+	static async ResetPriceAlertBTCTimer()
 	{
-		Market.binance.ws.candles(['BTCUSDT', 'ETHUSDT'], '15m', candle => {
+		if (Market.btccandletimer != null)
+		{
+			clearTimeout(Market.btccandletimer);
+		}
+		Market.btccandletimer = setTimeout(() => {
+		  Market.InitPriceAlertsBTC();
+		}, 30*1000);
+	}
+	
+	static async ResetPriceAlertETHTimer()
+	{
+		if (Market.ethcandletimer != null)
+		{
+			clearTimeout(Market.ethcandletimer);
+		}
+		Market.ethcandletimer = setTimeout(() => {
+		  Market.InitPriceAlertsETH();
+		}, 30*1000);
+	}
+	
+	static async InitPriceAlertsBTC()
+	{
+		if (Market.btccandlecanceltoken != null)
+		{
+		  try
+		  {
+			  Market.btccandlecanceltoken();
+		  }catch(e){}
+		}
+		Market.btccandlecanceltoken = Market.binance.ws.candles('BTCUSDT', '15m', candle => {
+			Market.ResetPriceAlertBTCTimer();
 			Market.ProcessAlerterCandle(candle);
 		});
+	}
+	static async InitPriceAlertsETH()
+	{
+		if (Market.ethcandlecanceltoken != null)
+		{
+		  try
+		  {
+			  Market.ethcandlecanceltoken();
+		  }catch(e){}
+		}
+		Market.ethcandlecanceltoken = Market.binance.ws.candles('ETHUSDT', '15m', candle => {
+			Market.ResetPriceAlertETHTimer();
+			Market.ProcessAlerterCandle(candle);
+		});
+	}
+	
+	static async InitPriceAlerts()
+	{
+		Market.InitPriceAlertsBTC();
+		Market.InitPriceAlertsETH();
+
 	}
 	
 };

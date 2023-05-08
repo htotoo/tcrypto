@@ -145,3 +145,4 @@ dist
 .bot
 apis.json
 config.json
+special_.js
