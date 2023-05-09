@@ -233,6 +233,45 @@ class Market  {
         return cprice;
     }
 	
+	static GetExchangeInfoForSymbol(symbol)
+    {
+        for (let o in Market.exchangeInfo.symbols)
+        {
+            if (Market.exchangeInfo.symbols[o].symbol == symbol) return Market.exchangeInfo.symbols[o];
+        }
+        return null;
+    }
+    
+	static GetTickSize(exinfo)
+    {
+        for (let i in exinfo.filters)
+        {
+            if (exinfo.filters[i].filterType == "PRICE_FILTER")
+            {
+                return exinfo.filters[i].tickSize;
+            }
+        }
+        return 0.00000000001;
+    }
+        
+    static roundTicks( price, tickSize )
+    {
+        const formatter = new Intl.NumberFormat( 'en-US', { style: 'decimal', minimumFractionDigits: 0, maximumFractionDigits: 8 } );
+        const precision = formatter.format( tickSize ).split( '.' )[1].length || 0;
+        if ( typeof price === 'string' ) price = parseFloat( price );
+        return price.toFixed( precision );
+    }
+    
+    static FixPriceForSymbol (price, symbol)
+    {
+        if ( typeof price === 'string' ) price = parseFloat( price );
+        let ex = Market.GetExchangeInfoForSymbol(symbol);
+        let precision = ex.quotePrecision;
+        let tickSize = Market.GetTickSize(ex);
+        let ret = Market.roundTicks(price , tickSize);
+        ret = toFixedTrunc(ret, precision);
+        return ret;
+    }
 	
 	static async CancelOrder(userid, orderid, symbol)
     {
