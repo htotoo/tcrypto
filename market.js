@@ -353,6 +353,49 @@ class Market  {
 		*/		
 	}
 	
+	static FollowCalc (followdata, cprice)
+    {
+        let obj = {};
+        obj.needChange = false;
+        if (followdata == null) return obj;
+        {
+            let ex = Market.GetExchangeInfoForSymbol(followdata.symbol);
+            let precision = ex.quotePrecision;
+            let tickSize = Market.GetTickSize(ex);
+            if (followdata.direction == "up")
+            {
+                let neededStop = cprice * ((100-followdata.stoppercent)/100);
+                let neededPrice = cprice * ((100-followdata.pricepercent)/100);
+                neededStop = Market.roundTicks(neededStop , tickSize);
+                neededPrice = Market.roundTicks(neededPrice , tickSize);
+                neededStop = Market.toFixedTrunc(neededStop, precision);
+                neededPrice = Market.toFixedTrunc(neededPrice, precision);
+                if (followdata.currstop < neededStop)
+                {
+                    obj.needChange = true;
+                    obj.neededStop = neededStop;
+                    obj.neededPrice = neededPrice;
+                }
+            }
+            else //down
+            {
+                let neededStop = cprice * ((100+followdata.stoppercent)/100);
+                let neededPrice = cprice * ((100+followdata.pricepercent)/100);
+                neededStop = Market.roundTicks(neededStop , tickSize);
+                neededPrice = Market.roundTicks(neededPrice , tickSize);
+                neededStop = parseFloat(Market.toFixedTrunc(neededStop, precision));
+                neededPrice = parseFloat(Market.toFixedTrunc(neededPrice, precision));
+                if (followdata.currstop > neededStop)
+                {
+                    obj.needChange = true;
+                    obj.neededStop = neededStop;
+                    obj.neededPrice = neededPrice;
+                }
+            }
+        }
+        return obj;
+    }
+	
 	static GetPairInfo(pair)
 	{ 
 		 pair = pair.toUpperCase();
@@ -510,11 +553,160 @@ class Market  {
 	
 };
 
+
+
+class BotBase {
+    static TriggerType = { None : 0, Order : 1, PriceGt : 2, PriceLt : 3, Follow: 4, Triggered : 255 } //follow triggers both order and price
+    static BotType = { None : 0, SellLimit : 1, BuyLimit : 2, FollowUpStopLimit : 3, FollowDownStopLimit : 4 }
+    
+    constructor() {
+        this.isRunning = false; //is currently handling stuff
+        this.triggetType = BotBase.TriggerType.None;
+        this.botType = BotBase.BotType.None;
+        this.owner = ""; //userId
+        this.triggerParams = {};  //trigger params.
+        this.sbParams = {}; //paramt to do when triggered
+        this.id = Math.floor(Math.random()*650000);
+    }
+	
+    static FromJson(json)
+    {
+        let ret = new BotBase();
+        ret.triggetType = json.triggetType;
+        ret.botType = json.botType;
+        ret.owner = json.owner;
+        ret.triggerParams = json.triggerParams;
+        ret.sbParams = json.sbParams;
+        ret.id = json.id;
+        return ret;
+    }
+    
+    async handle(binance, symbolData = null, orderMessage = null) {
+        if (this.isRunning) return "";
+        this.isRunning = true;
+        
+        if (this.botType == BotBase.BotType.SellLimit)
+        {
+            this.triggetType = BotBase.TriggerType.Triggered;
+            let r = await Market.NewOrder(binance, this.sbParams.symbol, "SELL", "LIMIT", this.sbParams.quantity, this.sbParams.price);
+            this.Destroy(); //mark as to be deleted
+            if (r)
+            {
+                this.isRunning = false;
+                return "Success auto sell limit. Symbol: " + this.sbParams.symbol + "  Price: " + this.sbParams.price.toString() + "  Quantity: " + this.sbParams.quantity.toString();
+            }
+            this.isRunning = false;
+            return "Error putting order";
+        }
+        
+        if (this.botType == BotBase.BotType.BuyLimit)
+        {
+            this.triggetType = BotBase.TriggerType.Triggered;
+            let r = await Market.NewOrder(binance, this.sbParams.symbol, "BUY", "LIMIT", this.sbParams.quantity, this.sbParams.price);
+            this.Destroy(); //mark as to be deleted
+            if (r)
+            {
+                this.isRunning = false;
+                return "Success auto buy limit. Symbol: " + this.sbParams.symbol + "  Price: " + this.sbParams.price.toString() + "  Quantity: " + this.sbParams.quantity.toString();
+            }
+            this.isRunning = false;
+            return "Error putting order";
+        }
+        
+        if (this.triggetType == BotBase.TriggerType.Follow && symbolData != null)
+        {
+            //console.log(this);
+            this.sbParams.counter = this.sbParams.counter + 1;
+            if (this.sbParams.counter>10) this.sbParams.counter = 0;
+            if (this.sbParams.counter != 1)
+            {
+                this.isRunning = false;
+                return;
+            }
+            //step 1, check if needed to change
+            let followdata = {};
+            followdata.symbol = this.triggerParams.symbol;
+            followdata.direction = "up";
+            if (this.botType == BotBase.BotType.FollowDownStopLimit) followdata.direction = "down";
+            followdata.stoppercent = this.sbParams.stoppercent;
+            followdata.pricepercent = this.sbParams.pricepercent;
+            followdata.currstop = this.sbParams.currstop;
+            
+            let ret = Market.FollowCalc(followdata, parseFloat(symbolData['bestBid']));
+            
+            if (ret.needChange)
+            {
+                 //step 2. if needed, CHANGE stored order ID, to skip bot deletion!!!
+                 let origOrderId = this.triggerParams.orderId;
+                 this.triggerParams.orderId = "tmpDis";
+                 //step 3. delete original order
+                 let suc = await Market.CancelOrder(binance, origOrderId, this.triggerParams.symbol);
+                 if (suc)
+                 {
+                    //step 4. make new order, and save data.
+                    let diri = "SELL";
+                    if (this.botType == BotBase.BotType.FollowDownStopLimit) { diri = "BUY"; }
+                    let r = await Market.NewOrder(binance, this.sbParams.symbol, diri, "STOP_LOSS_LIMIT", this.sbParams.quantity, ret.neededPrice, ret.neededStop);
+                    if (r == null)
+                    {
+                        this.Destroy();
+                    }
+                    else
+                    {
+                        this.triggerParams.orderId = r.orderId;
+                        this.sbParams.currstop = ret.neededStop;
+                    }
+                 }
+                 else
+                 {
+                     this.Destroy(); //todo handle other way?
+                 }
+            }
+            this.isRunning = false;
+            return;
+        }
+        
+        this.isRunning = false;
+        return "ERROR, NOT IMPLEMENTED";
+    }
+    
+    
+    Destroy()
+    {//mark as to be destroyed
+        this.triggetType = BotBase.TriggerType.None;
+        this.botType = BotBase.BotType.None;
+    }
+    
+    Stringify()
+    {
+        if (this.triggetType == BotBase.TriggerType.None || this.botType == BotBase.BotType.None ) return ""; //to be deleted
+        
+        let ret = this.id.toString() + ": ";
+        if (this.triggetType == BotBase.TriggerType.Order) ret = ret + "T: Order";
+        if (this.triggetType == BotBase.TriggerType.PriceGt) ret = ret + "T: PriceGt";
+        if (this.triggetType == BotBase.TriggerType.PriceLt) ret = ret + "T: PriceLt";
+        if (this.triggetType == BotBase.TriggerType.Triggered) ret = ret + "T: Triggered";
+        
+        if (this.botType == BotBase.BotType.SellLimit) ret = ret + "  B: SellLimit";
+        if (this.botType == BotBase.BotType.BuyLimit) ret = ret + "  B: BuyLimit";
+        if (this.botType == BotBase.BotType.FollowUpStopLimit) ret = ret + "  B: FollowUpStopLimit";
+        if (this.botType == BotBase.BotType.FollowDownStopLimit) ret = ret + "  B: FollowDownStopLimit";
+        
+        ret = ret + "\n";
+        ret = ret + "TP: " +  JSON.stringify(this.triggerParams) + "    SBP: "  + JSON.stringify(this.sbParams);
+        ret = ret + "\n";
+        return ret;
+    }
+    
+}
+
 class Bot
 {
 	static apis = {};
 	static clients = {};
 	static wscloses = {};
+	
+	static bots = [];
 	
 	static CallBackExecutionReport = null;
 	
@@ -529,12 +721,59 @@ class Bot
         await Market.UpdateAllPrices();
 		//init price alerters
 		await Market.InitPriceAlerts();
-		
+		//bot handlings
+		Bot.LoadBots();
 		//init all ws clients
 		Bot.ResetWsClients();
 		
 		console.log("Inited bot stuff");
 	}
+	
+	static LoadBots()
+    {
+		try
+		{
+			let botsnative = require('./botconfigs.json');
+			for(let id in botsnative){
+				Bot.bots.push(BotBase.FromJson(botsnative[id]));
+			}
+		}catch(e){}
+    }
+	
+	static SaveBots()
+    {
+        fs.writeFile('botconfigs.json',JSON.stringify(Bot.bots), (err) => { if (err) console.log(err);} );
+    }
+	
+	static GetBotById(id)
+    {
+        if (id == null || id == 0) return null;
+        for(let botId in Bot.bots){
+            let bot = Bot.bots[botId];
+            if (bot.id == id) return bot;
+        }
+        return null;
+    }
+	
+	static DeleteMarkeds()
+    {
+        let deled = 1;
+        let realdeled = 0;
+        while (deled != 0)
+        {
+            deled = 0;
+            for(let botId in Bot.bots)
+            {
+                if (Bot.bots[botId].triggetType == BotBase.TriggerType.None && Bot.bots[botId].botType == BotBase.BotType.None)
+                {
+                    deled = 1; realdeled = 1;
+                    Bot.bots.splice(botId,1);
+                    break;
+                }
+            }
+        }
+        if (realdeled > 0) Bot.SaveBots();
+    }
 	
 	static async ResetWsClients()
 	{
@@ -551,7 +790,7 @@ class Bot
 		try
 		{
 			Bot.clients[userid] = Binance( Bot.apis[userid]["api"] );
-			Bot.wscloses[userid] = await Bot.clients[userid].ws.user(msg => {  Bot.CheckStreamedMsg(msg, userid); });      
+			Bot.wscloses[userid] = await Bot.clients[userid].ws.user(msg => {  Bot.CheckStreamedMsg(msg, userid); });
 		}
 		catch(e) { console.log(e);}
 	}
@@ -570,8 +809,7 @@ class Bot
 				} catch (e){};
 				delete Bot.wscloses[userid];
 			}
-	}
-	
+	}	
 	
 	static AddApi(userid, key, secret)
 	{
@@ -590,6 +828,7 @@ class Bot
 		Bot.InitWsClient(userid);
 		return (newkey)?"Added new API key":"Updated API key";
 	}
+	
 	static DelApi(userid)
 	{
 		delete Bot.apis[userid];
@@ -598,6 +837,16 @@ class Bot
 		return "API key deleted";
 	}
 		
+	static async OrderCreated(uid, msg)
+	{
+		//todo add to order list
+	}
+		
+	static async OrderGone(uid, msg)
+	{
+		//todo do bot stuff.
+		//todo remove from list!
+	}
 	
 	static CheckStreamedMsg(msg, uid)
 	{
@@ -606,25 +855,16 @@ class Bot
 			console.log(msg);
 			if (msg.eventType == "executionReport")
 			{       
-				//todo:
 				//AUTO TRADE SCRIPT
-				/*
 				if (msg.orderStatus == "FILLED"|| msg.orderStatus == "CANCELED" || msg.orderStatus == "REJECTED" || msg.orderStatus == "EXPIRED")
 				{
-					//if (CallBackOrderGone != null && (uid in biClientStreamers)) CallBackOrderGone(uid, msg, biClientStreamers[uid]['cli']);
-				}
-				
-			  //REFRESH ORDER STATUS
-				if (msg.orderStatus == "FILLED" || msg.orderStatus == "CANCELED" || msg.orderStatus == "REJECTED" || msg.orderStatus == "EXPIRED")
-				{
-					//RemoveOrderFromList(uid, msg);
+					Bot.OrderGone(uid, msg);
 				}
 				if (msg.orderStatus == "NEW")
 				{
-					//AddOrderToList(uid, msg);
+					Bot.OrderCreated(uid, msg);
 				}
-				*/
-				
+				//reporting
 				if (Bot.CallBackExecutionReport != null)
 					{
 					//GENERATING STR Response
@@ -660,10 +900,42 @@ class Bot
 		}
 		catch(e){}
 	}
+	
+	static CMD_MyBots(uid)
+    {
+        let str = "";
+        for(let botId in this.bots){
+            let bot = this.bots[botId];
+            if (bot.owner == uid)
+            {
+                str = str + bot.Stringify();
+            }
+        }
+        if (str == "") str = "No bots yet for you.";
+        return str;
+    }
+	
+	static CMD_DelBot(uid, botid)
+    {
+        let botId = parseInt(botid);
+        let bot = Bot.GetBotById(botId);
+        if (bot == null) 
+        {
+             return "No bot with that id.";
+            return;
+        }
+		if (bot.owner == uid)
+		{
+			bot.Destroy();
+			return "Bot destroyed.";
+		}
+		return "That is not your bot!";
+    }
 }
 
 module.exports = {
   Market: Market,
-  Bot: Bot
+  Bot: Bot,
+  BotBase : BotBase
 };
 
