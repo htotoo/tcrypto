@@ -539,8 +539,8 @@ class Market  {
 		}
 		Market.alltickertoken = Market.binance.ws.allTickers( ticker => {
 			Market.ResetAllTickerTimer();
-			//todo bot
 			Market.allTickers = ticker;
+			Bot.HandlePriceUpdate(ticker);
 		});
 	}
 
@@ -847,6 +847,55 @@ class Bot
 		//todo do bot stuff.
 		//todo remove from list!
 	}
+	
+	static async HandlePriceUpdatePerSymbol(symboldata)
+    {
+		for(let botId in Bot.bots){
+            let bot = Bot.bots[botId];
+            if (bot.triggetType == BotBase.TriggerType.PriceGt || bot.triggetType == BotBase.TriggerType.PriceLt || bot.triggetType == BotBase.TriggerType.Follow)
+            {
+                if ('symbol' in bot.triggerParams && bot.triggerParams.symbol == symboldata['symbol']) {
+                    if (bot.triggetType == BotBase.TriggerType.Follow)
+                    {
+                        if (bot.owner in Bot.clients) bot.handle(Bot.clients[userid][bot.owner], symboldata);
+                    }
+                    else
+                    { //if price goes up or down trigger
+                        if ('price' in bot.triggerParams)
+                        {
+                            let tp = bot.triggerParams.price;
+                            let sp = parseFloat(symboldata['bestBid']);
+                            if  ( (bot.triggetType == BotBase.TriggerType.PriceGt && sp>=tp) || (bot.triggetType == BotBase.TriggerType.PriceLt && sp<=tp) )
+                            {
+                                if (bot.owner in Bot.clients) bot.handle(Bot.clients[userid][bot.owner], symboldata);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+	}
+	
+	static async HandlePriceUpdate(tickers)
+    {
+		Bot.DeleteMarkeds();
+        let symbolsToCheck = []
+        for(let botId in Bot.bots){
+            let bot = Bot.bots[botId];
+            if (bot.triggetType == BotBase.TriggerType.PriceGt || bot.triggetType == BotBase.TriggerType.PriceLt || bot.triggetType == BotBase.TriggerType.Follow)
+            {
+                if ('symbol' in bot.triggerParams) { symbolsToCheck.push(bot.triggerParams.symbol);  }
+            }
+        }        
+        for(let index in tickers){
+            if (symbolsToCheck.includes( tickers[index]['symbol'] ))
+            {
+                Bot.HandlePriceUpdatePerSymbol(tickers[index]);
+            }
+        }
+        return "";
+	}
+	
 	
 	static CheckStreamedMsg(msg, uid)
 	{
